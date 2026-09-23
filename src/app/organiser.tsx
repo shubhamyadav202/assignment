@@ -82,8 +82,27 @@ export default function OrganiserScreen() {
   );
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    let isMounted = true;
+    fetchDanceApplications(activeTab, searchQuery)
+      .then((res) => {
+        if (!isMounted) return;
+        setApplications(res.data);
+        setCounts(res.counts);
+      })
+      .catch((err: any) => {
+        if (!isMounted) return;
+        Alert.alert("Error", err.message || "Failed to load applications");
+      })
+      .finally(() => {
+        if (!isMounted) return;
+        setLoading(false);
+        setRefreshing(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, searchQuery]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -214,7 +233,7 @@ export default function OrganiserScreen() {
             <Text style={styles.resendTitle}>Resend Email Automation Active</Text>
           </View>
           <Text style={styles.resendBody}>
-            When you tap <Text style={{ fontWeight: "700" }}>"Accept & Send Email"</Text>, Resend dispatches the official congratulations notice with event guidelines directly to the leader's email.
+            When you tap <Text style={{ fontWeight: "700" }}>{"\"Accept & Send Email\""}</Text>, Resend dispatches the official congratulations notice with event guidelines directly to the leader&apos;s email.
           </Text>
         </View>
 
@@ -360,7 +379,7 @@ export default function OrganiserScreen() {
                   <View style={styles.proposalBox}>
                     <Text style={styles.proposalLabel}>Proposal Concept:</Text>
                     <Text style={styles.proposalText} numberOfLines={3}>
-                      "{app.proposal}"
+                      {`"${app.proposal}"`}
                     </Text>
                   </View>
                 ) : null}

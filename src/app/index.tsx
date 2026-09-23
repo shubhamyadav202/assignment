@@ -778,7 +778,7 @@ export default function CompetitionDetailScreen() {
 
               <Text style={styles.modalSectionTitle}>How to Request a Refund</Text>
               <Text style={styles.modalText}>
-                • Go to My Registrations → Select the competition → Tap "Request Refund".{"\n"}
+                • Go to My Registrations → Select the competition → Tap {"\"Request Refund\""}.{"\n"}
                 • Alternatively, email support@feedants.com with your registration ID.
               </Text>
 

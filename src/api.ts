@@ -128,6 +128,46 @@ export async function fetchCompetition(): Promise<Competition> {
   return detailData.data as Competition;
 }
 
+export interface UploadVideoResponse {
+  success: boolean;
+  url: string;
+  publicId?: string;
+  duration?: number;
+  simulated?: boolean;
+  message?: string;
+}
+
+/**
+ * Upload an audition video file to Cloudinary via backend.
+ */
+export async function uploadAuditionVideo(video: {
+  uri: string;
+  name?: string;
+  type?: string;
+}): Promise<UploadVideoResponse> {
+  const formData = new FormData();
+  const filename = video.name || video.uri.split("/").pop() || "audition.mp4";
+  const mimeType = video.type || "video/mp4";
+
+  formData.append("video", {
+    uri: video.uri,
+    type: mimeType,
+    name: filename,
+  } as any);
+
+  const res = await fetch(`${BASE_URL}/upload/video`, {
+    method: "POST",
+    body: formData,
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || "Failed to upload video to Cloudinary");
+  }
+
+  return json;
+}
+
 /**
  * Submit a dance team application to the competition.
  */

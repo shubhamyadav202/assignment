@@ -14,7 +14,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { submitDanceApplication, DanceApplication } from "../api";
+import * as ImagePicker from "expo-image-picker";
+import { submitDanceApplication, uploadAuditionVideo, DanceApplication } from "../api";
 
 const COLORS = {
   primary: "#0B6B6B",
@@ -62,6 +63,13 @@ export default function ApplyScreen() {
   const [experienceLevel, setExperienceLevel] = useState<"Beginner" | "Intermediate" | "Advanced" | "Professional">("Advanced");
   const [city, setCity] = useState("Mumbai");
   const [videoUrl, setVideoUrl] = useState("");
+  const [selectedVideo, setSelectedVideo] = useState<{
+    uri: string;
+    name: string;
+    size?: number;
+    duration?: number;
+  } | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const [proposal, setProposal] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -77,8 +85,109 @@ export default function ApplyScreen() {
     setSelectedStyle("Hip-Hop / Popping");
     setExperienceLevel("Professional");
     setCity("Mumbai");
-    setVideoUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    setVideoUrl("https://res.cloudinary.com/demo/video/upload/samples/sea-turtle.mp4");
+    setSelectedVideo({
+      uri: "https://res.cloudinary.com/demo/video/upload/samples/sea-turtle.mp4",
+      name: "vibe_dynasty_audition.mp4",
+      size: 14200000,
+      duration: 120,
+    });
     setProposal("An explosive fusion of krump, locking, and synchronized formation drops highlighting youth energy and cultural pride.");
+  };
+
+  const uploadVideoFile = async (videoData: {
+    uri: string;
+    name: string;
+    type?: string;
+    size?: number;
+    duration?: number;
+  }) => {
+    try {
+      setUploadingVideo(true);
+      const res = await uploadAuditionVideo(videoData);
+      setVideoUrl(res.url);
+      Alert.alert(
+        "Upload Complete! ☁️",
+        res.simulated
+          ? "Audition video processed via simulated Cloudinary storage (add Cloudinary keys to backend/.env for live storage)."
+          : "Your audition video has been uploaded and stored on Cloudinary!"
+      );
+    } catch (err: any) {
+      Alert.alert(
+        "Cloudinary Upload Failed",
+        err.message || "Failed to upload video to Cloudinary. You can try again or enter a direct link."
+      );
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
+  const pickVideoFromGallery = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          "Permission Required",
+          "Please grant media library access to select your audition video."
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["videos"],
+        allowsEditing: false,
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const videoData = {
+          uri: asset.uri,
+          name: asset.fileName || `audition_${Date.now()}.mp4`,
+          type: asset.mimeType || "video/mp4",
+          size: asset.fileSize,
+          duration: asset.duration ? Math.round(asset.duration / 1000) : undefined,
+        };
+        setSelectedVideo(videoData);
+        await uploadVideoFile(videoData);
+      }
+    } catch (err: any) {
+      Alert.alert("Video Selection Error", err.message || "Could not select video.");
+    }
+  };
+
+  const recordVideoWithCamera = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          "Permission Required",
+          "Please grant camera access to record your audition video."
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["videos"],
+        allowsEditing: false,
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const videoData = {
+          uri: asset.uri,
+          name: asset.fileName || `recorded_audition_${Date.now()}.mp4`,
+          type: asset.mimeType || "video/mp4",
+          size: asset.fileSize,
+          duration: asset.duration ? Math.round(asset.duration / 1000) : undefined,
+        };
+        setSelectedVideo(videoData);
+        await uploadVideoFile(videoData);
+      }
+    } catch (err: any) {
+      Alert.alert("Camera Error", err.message || "Could not record video.");
+    }
   };
 
   const handleSubmit = async () => {
@@ -99,7 +208,7 @@ export default function ApplyScreen() {
       return;
     }
     if (!videoUrl.trim()) {
-      Alert.alert("Missing Video Link", "Please provide a link to your audition or past stage performance video.");
+      Alert.alert("Missing Audition Video", "Please tap the video box to select your audition video from your gallery.");
       return;
     }
 
@@ -160,7 +269,7 @@ export default function ApplyScreen() {
             </View>
             <Text style={styles.bannerTitle}>Feedants National Championship</Text>
             <Text style={styles.bannerDescription}>
-              Complete the crew profile and paste your audition video link. Once the organiser reviews and accepts your proposal, a confirmation email will be delivered to you via Resend!
+              Complete the crew profile and upload your audition video. Once the organiser reviews and accepts your proposal, a confirmation email will be delivered to you via Resend!
             </Text>
           </View>
 
@@ -311,18 +420,104 @@ export default function ApplyScreen() {
               <Text style={styles.sectionTitle}>Audition Video & Concept</Text>
             </View>
 
-            <Text style={styles.inputLabel}>
-              Performance / Audition Video URL <Text style={styles.required}>*</Text>
+            <View style={styles.videoHeaderRow}>
+              <Text style={styles.inputLabel}>
+                Performance / Audition Video <Text style={styles.required}>*</Text>
+              </Text>
+              <View style={styles.cloudinaryBadge}>
+                <Text style={styles.cloudinaryBadgeText}>☁️ Cloudinary Storage</Text>
+              </View>
+            </View>
+            <Text style={styles.inputSubtext}>
+              Tap the field below to open your device gallery and upload your crew&apos;s audition video.
             </Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="https://youtube.com/watch?v=... or Google Drive link"
-              placeholderTextColor={COLORS.gray400}
-              autoCapitalize="none"
-              keyboardType="url"
-              value={videoUrl}
-              onChangeText={setVideoUrl}
-            />
+
+            {/* Tap to Open Gallery Input Box */}
+            {!videoUrl && !uploadingVideo ? (
+              <TouchableOpacity
+                style={styles.galleryInputBox}
+                onPress={pickVideoFromGallery}
+                activeOpacity={0.7}
+              >
+                <View style={styles.galleryInputIconCircle}>
+                  <Text style={styles.galleryInputIcon}>📁</Text>
+                </View>
+                <View style={styles.galleryInputTextContainer}>
+                  <Text style={styles.galleryInputPlaceholder}>
+                    Tap to select video from Gallery
+                  </Text>
+                  <Text style={styles.galleryInputSub}>
+                    Opens device gallery • Automatically uploads to Cloudinary
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.cameraIconBtn}
+                  onPress={recordVideoWithCamera}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.cameraIconText}>🎥</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ) : uploadingVideo ? (
+              <View style={styles.uploadingBox}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.uploadingTitle}>
+                    Uploading to Cloudinary...
+                  </Text>
+                  <Text style={styles.uploadingSub}>
+                    {selectedVideo?.name || "Processing video file"}
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.videoSelectedCard}>
+                <View style={styles.videoSelectedTop}>
+                  <View style={styles.videoFileIconCircle}>
+                    <Text style={styles.videoFileIcon}>🎬</Text>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.videoFileName} numberOfLines={1}>
+                      {selectedVideo?.name || "Audition Video Uploaded"}
+                    </Text>
+                    <Text style={styles.videoFileMeta}>
+                      {selectedVideo?.size
+                        ? `${(selectedVideo.size / (1024 * 1024)).toFixed(1)} MB`
+                        : "Video file ready"}
+                      {selectedVideo?.duration ? ` • ~${selectedVideo.duration}s` : ""}
+                    </Text>
+                  </View>
+                  <View style={styles.uploadedCheckBadge}>
+                    <Text style={styles.uploadedCheckText}>✓ Stored</Text>
+                  </View>
+                </View>
+
+                <View style={styles.videoUrlPreviewBox}>
+                  <Text style={styles.videoUrlPreviewLabel}>Cloudinary Video URL:</Text>
+                  <Text style={styles.videoUrlPreviewText} numberOfLines={1}>
+                    {videoUrl}
+                  </Text>
+                </View>
+
+                <View style={styles.videoCardFooter}>
+                  <TouchableOpacity
+                    style={styles.videoCardChangeBtn}
+                    onPress={pickVideoFromGallery}
+                  >
+                    <Text style={styles.videoCardChangeBtnText}>🔄 Open Gallery to Replace</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.videoCardRemoveBtn}
+                    onPress={() => {
+                      setSelectedVideo(null);
+                      setVideoUrl("");
+                    }}
+                  >
+                    <Text style={styles.videoCardRemoveBtnText}>✕ Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
             <Text style={styles.inputLabel}>Choreography Proposal & Theme</Text>
             <TextInput
@@ -804,5 +999,189 @@ const styles = StyleSheet.create({
   modalSecondaryBtnText: {
     fontSize: 13,
     color: COLORS.gray500,
+  },
+  videoHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  cloudinaryBadge: {
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  cloudinaryBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#1D4ED8",
+  },
+  galleryInputBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.white,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginVertical: 10,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  galleryInputIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  galleryInputIcon: {
+    fontSize: 22,
+  },
+  galleryInputTextContainer: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  galleryInputPlaceholder: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+  },
+  galleryInputSub: {
+    fontSize: 11,
+    color: COLORS.gray500,
+    marginTop: 2,
+  },
+  cameraIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.gray100,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 8,
+  },
+  cameraIconText: {
+    fontSize: 18,
+  },
+  uploadingBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+    borderRadius: 12,
+    padding: 14,
+    marginVertical: 10,
+  },
+  uploadingTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#B45309",
+  },
+  uploadingSub: {
+    fontSize: 11,
+    color: "#92400E",
+    marginTop: 2,
+  },
+  videoSelectedCard: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+    borderRadius: 12,
+    padding: 14,
+    marginVertical: 10,
+  },
+  videoSelectedTop: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  videoFileIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#DCFCE7",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  videoFileIcon: {
+    fontSize: 20,
+  },
+  videoFileName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.black,
+  },
+  videoFileMeta: {
+    fontSize: 12,
+    color: COLORS.gray600,
+    marginTop: 2,
+  },
+  uploadedCheckBadge: {
+    backgroundColor: "#22C55E",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  uploadedCheckText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  videoUrlPreviewBox: {
+    marginTop: 10,
+    padding: 8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+  },
+  videoUrlPreviewLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: COLORS.gray500,
+    textTransform: "uppercase",
+  },
+  videoUrlPreviewText: {
+    fontSize: 12,
+    color: COLORS.primaryDark,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  videoCardFooter: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#BBF7D0",
+  },
+  videoCardChangeBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  videoCardChangeBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+  videoCardRemoveBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  videoCardRemoveBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.red,
   },
 });
