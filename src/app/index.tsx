@@ -11,8 +11,13 @@ import {
   FlatList,
   Linking,
   TextInput,
+  ActivityIndicator,
+  KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { TRANSLATIONS, POSITION_KEY } from "../translations";
+import { fetchCompetition, Competition } from "../api";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -40,35 +45,40 @@ const COLORS = {
   border: "#E0E0E0",
 };
 
-// ─── Winner Data ────────────────────────────────────────────────────────────
-const PREVIOUS_WINNERS = [
+// ─── Fallback Data (used when backend is unavailable) ───────────────────────
+const FALLBACK_WINNERS = [
   { name: "Riya Shah", position: "1st Winner", hasVideo: true },
   { name: "Aarav Mehta", position: "1st Winner", hasVideo: true },
   { name: "Neha Verma", position: "2nd Winner", hasVideo: true },
   { name: "Ishita Cha...", position: "3rd Winner", hasVideo: true },
 ];
 
-// ─── Rewards Data ───────────────────────────────────────────────────────────
-const REWARDS = [
-  { position: "1st Winner", amount: "550", icon: "🏆" },
-  { position: "2nd Winner", amount: "300", icon: "🥈" },
-  { position: "3rd Winner", amount: "240", icon: "🥉" },
-  { position: "4th Winner", amount: "200", icon: "⭐" },
-  { position: "5th Winner", amount: "130", icon: "☆" },
-  { position: "6th Winner", amount: "80", icon: "☆" },
+const FALLBACK_REWARDS = [
+  { position: "1st Winner", amount: 550, icon: "🏆" },
+  { position: "2nd Winner", amount: 300, icon: "🥈" },
+  { position: "3rd Winner", amount: 240, icon: "🥉" },
+  { position: "4th Winner", amount: 200, icon: "⭐" },
+  { position: "5th Winner", amount: 130, icon: "☆" },
+  { position: "6th Winner", amount: 80, icon: "☆" },
 ];
 
-// ─── Tab Options ────────────────────────────────────────────────────────────
-const TABS = ["About Competition", "Judging Parameters", "Rules & Eligibility"];
-
 // ─── Countdown Timer Hook ──────────────────────────────────────────────────
-function useCountdown() {
-  const [timeLeft, setTimeLeft] = useState({
-    days: 1,
-    hours: 6,
-    minutes: 28,
-    seconds: 32,
-  });
+function useCountdown(targetDate?: string) {
+  const computeTimeLeft = () => {
+    if (targetDate) {
+      const diff = new Date(targetDate).getTime() - Date.now();
+      if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+      return {
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+        minutes: Math.floor((diff / (1000 * 60)) % 60),
+        seconds: Math.floor((diff / 1000) % 60),
+      };
+    }
+    return { days: 1, hours: 6, minutes: 28, seconds: 32 };
+  };
+
+  const [timeLeft, setTimeLeft] = useState(computeTimeLeft);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -101,13 +111,115 @@ function useCountdown() {
 // ─── Helper: pad number ─────────────────────────────────────────────────────
 const pad = (n: number) => n.toString().padStart(2, "0");
 
+// ─── Helper: format Date for display ────────────────────────────────────────
+function formatDate(isoString: string): { date: string; time: string } {
+  const d = new Date(isoString);
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  const day = d.getDate();
+  const month = months[d.getMonth()];
+  const year = d.getFullYear().toString().slice(-2);
+  const hours = d.getHours();
+  const minutes = d.getMinutes();
+  const ampm = hours >= 12 ? "PM" : "AM";
+  const displayHour = hours % 12 || 12;
+
+  return {
+    date: `${day} ${month} ${year}`,
+    time: `${pad(displayHour)}:${pad(minutes)} ${ampm}`,
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 export default function CompetitionDetailScreen() {
   const [activeTab, setActiveTab] = useState(0);
   const [activeLang, setActiveLang] = useState("ENG");
-  const countdown = useCountdown();
+  const [competition, setCompetition] = useState<Competition | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [referralLink, setReferralLink] = useState("https://feedants.com/r/referral123");
+  const scrollViewRef = useRef<ScrollView>(null);
+  const referInputY = useRef(0);
+
+  // ── Fetch competition from backend ──────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchCompetition();
+        if (!cancelled) {
+          setCompetition(data);
+          setError(null);
+        }
+      } catch (err: any) {
+        console.warn("Failed to fetch from backend, using fallback data:", err.message);
+        if (!cancelled) {
+          setError(err.message);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Translation helper ──────────────────────────────────────────────────
+  const t = TRANSLATIONS[activeLang] || TRANSLATIONS["ENG"];
+
+  // ── Translate a position string (e.g. "1st Winner" → "प्रथम विजेता") ──
+  const translatePosition = (pos: string) => {
+    const key = POSITION_KEY[pos];
+    return key && t[key] ? t[key] : pos;
+  };
+
+  // ── Derived data from API or fallback ──────────────────────────────────
+  const comp = competition;
+  const title = comp?.title ?? t.competitionTitle;
+  const tags = comp?.tags ?? ["Dance", "Multi-Win"];
+  const prizePool = comp ? `₹ ${comp.prizePool.toLocaleString("en-IN")}` : t.prizeAmount;
+  const entryFee = comp ? `₹ ${comp.entryFee}` : t.entryFeeAmount;
+  const spotsLeft = comp ? comp.spotsLeft : 19;
+  const totalSpots = comp?.totalSpots ?? 20;
+  const bookedSpots = comp?.bookedSpots ?? 1;
+  const hasCertificate = comp?.certificateForWinners ?? true;
+  const judgeName = comp?.judge?.name ?? "Manju Dubey";
+  const judgeDesc = comp?.judge?.description ?? "Professional Kathak Dancer";
+  const judgeExp = comp?.judge?.experience ?? "12+ Years of Experience";
+  const aboutContent = comp?.aboutContent ?? [t.aboutText1, t.aboutText2, t.aboutText3];
+  const rewards = comp?.rewards ?? FALLBACK_REWARDS;
+  const previousWinners = comp?.previousWinners ?? FALLBACK_WINNERS;
+  const disclaimer = comp?.disclaimer ?? t.disclaimerText;
+  const referralEarning = comp?.referralEarning ?? 10;
+
+  // ── Dates from API or fallback ──────────────────────────────────────────
+  const regEnd = comp?.dates?.registrationEnd
+    ? formatDate(comp.dates.registrationEnd)
+    : { date: t.date1, time: t.time1 };
+  const subStart = comp?.dates?.submissionStart
+    ? formatDate(comp.dates.submissionStart)
+    : { date: t.date2, time: t.time2 };
+  const subEnd = comp?.dates?.submissionEnd
+    ? formatDate(comp.dates.submissionEnd)
+    : { date: t.date3, time: t.time3 };
+  const resultDate = comp?.dates?.resultDate
+    ? formatDate(comp.dates.resultDate)
+    : { date: t.date4, time: t.time4 };
+
+  const countdown = useCountdown(comp?.dates?.registrationEnd);
+
+  // ── Loading state ───────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={{ marginTop: 12, color: COLORS.gray500 }}>Loading…</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -115,7 +227,7 @@ export default function CompetitionDetailScreen() {
       <View style={styles.header}>
         <TouchableOpacity style={styles.goBackBtn}>
           <Text style={styles.goBackArrow}>←</Text>
-          <Text style={styles.goBackText}>Go back</Text>
+          <Text style={styles.goBackText}>{t.goBack}</Text>
         </TouchableOpacity>
         <View style={styles.langToggle}>
           <TouchableOpacity
@@ -154,55 +266,70 @@ export default function CompetitionDetailScreen() {
       </View>
 
       {/* ── Scrollable Content ──────────────────────────────────────── */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+      >
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
         {/* ── Title Section ─────────────────────────────────────────── */}
         <View style={styles.titleSection}>
           <View style={styles.titleRow}>
             <Text style={styles.competitionTitle}>
-              Feedants Classical Dance
+              {activeLang === "ENG" ? title : t.competitionTitle}
             </Text>
             <View style={styles.registeredBadge}>
               <Text style={styles.registeredCheckmark}>✓</Text>
-              <Text style={styles.registeredText}>Registered</Text>
+              <Text style={styles.registeredText}>{t.registered}</Text>
             </View>
           </View>
 
           {/* Tags */}
           <View style={styles.tagsRow}>
             <View style={styles.tag}>
-              <Text style={styles.tagText}>Dance</Text>
+              <Text style={styles.tagText}>{t.tagDance}</Text>
             </View>
             <View style={styles.tag}>
-              <Text style={styles.tagText}>Multi-Win</Text>
+              <Text style={styles.tagText}>{t.tagMultiWin}</Text>
             </View>
-            <View style={styles.tagCertificate}>
-              <Text style={styles.tagCertificateIcon}>🏅</Text>
-              <Text style={styles.tagCertificateText}>
-                Winners get certificate
-              </Text>
-            </View>
+            {hasCertificate && (
+              <View style={styles.tagCertificate}>
+                <Text style={styles.tagCertificateIcon}>🏅</Text>
+                <Text style={styles.tagCertificateText}>
+                  {t.winnersGetCertificate}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Prize & Entry Fee */}
           <View style={styles.prizeRow}>
             <View style={styles.prizeCol}>
-              <Text style={styles.prizeLabel}>Prize Pool</Text>
-              <Text style={styles.prizeAmount}>₹ 1,500</Text>
+              <Text style={styles.prizeLabel}>{t.prizePool}</Text>
+              <Text style={styles.prizeAmount}>{prizePool}</Text>
             </View>
             <View style={styles.entryFeeCol}>
-              <Text style={styles.prizeLabel}>Entry Fee</Text>
-              <Text style={styles.entryFeeAmount}>₹ 99</Text>
+              <Text style={styles.prizeLabel}>{t.entryFee}</Text>
+              <Text style={styles.entryFeeAmount}>{entryFee}</Text>
             </View>
             <View style={styles.spotsCol}>
               <View style={styles.spotsRow}>
                 <Text style={styles.spotsIcon}>👥</Text>
-                <Text style={styles.spotsHighlight}>Only 19 spots left</Text>
+                <Text style={styles.spotsHighlight}>
+                  {activeLang === "ENG"
+                    ? `Only ${spotsLeft} spots left`
+                    : `केवल ${spotsLeft} स्थान शेष`}
+                </Text>
               </View>
-              <Text style={styles.bookedText}>1 / 20 Booked</Text>
+              <Text style={styles.bookedText}>
+                {`${bookedSpots} / ${totalSpots} ${activeLang === "ENG" ? "Booked" : "बुक"}`}
+              </Text>
             </View>
           </View>
         </View>
@@ -218,17 +345,23 @@ export default function CompetitionDetailScreen() {
               </View>
             </View>
             <View style={styles.judgeInfo}>
-              <Text style={styles.judgeRole}>Judge</Text>
-              <Text style={styles.judgeName}>Manju Dubey</Text>
-              <Text style={styles.judgeDesc}>Professional Kathak Dancer</Text>
-              <Text style={styles.judgeDesc}>12+ Years of Experience</Text>
+              <Text style={styles.judgeRole}>{t.judgeRole}</Text>
+              <Text style={styles.judgeName}>
+                {activeLang === "ENG" ? judgeName : t.judgeName}
+              </Text>
+              <Text style={styles.judgeDesc}>
+                {activeLang === "ENG" ? judgeDesc : t.judgeDesc}
+              </Text>
+              <Text style={styles.judgeDesc}>
+                {activeLang === "ENG" ? judgeExp : t.judgeExp}
+              </Text>
             </View>
           </View>
           <TouchableOpacity style={styles.introVideoBtn}>
             <View style={styles.playIcon}>
               <Text style={styles.playIconText}>▶</Text>
             </View>
-            <Text style={styles.introVideoText}>Intro Video</Text>
+            <Text style={styles.introVideoText}>{t.introVideo}</Text>
           </TouchableOpacity>
         </View>
 
@@ -236,44 +369,44 @@ export default function CompetitionDetailScreen() {
         <View style={styles.timerBar}>
           <View style={styles.timerLeft}>
             <Text style={styles.timerIcon}>⏰</Text>
-            <Text style={styles.timerLabel}>Registration closes in</Text>
+            <Text style={styles.timerLabel}>{t.regClosesIn}</Text>
           </View>
           <Text style={styles.timerValue}>
             {`${pad(countdown.days)}d : ${pad(countdown.hours)}h : ${pad(countdown.minutes)}m : ${pad(countdown.seconds)}s`}
           </Text>
           <View style={styles.timerRight}>
             <Text style={styles.hurryIcon}>🔥</Text>
-            <Text style={styles.hurryText}>Hurry up!</Text>
+            <Text style={styles.hurryText}>{t.hurryUp}</Text>
           </View>
         </View>
 
         {/* ── Important Dates ────────────────────────────────────────── */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Important Dates</Text>
+          <Text style={styles.sectionTitle}>{t.importantDates}</Text>
           <View style={styles.datesGrid}>
             <View style={styles.dateCard}>
               <Text style={styles.dateIcon}>📋</Text>
-              <Text style={styles.dateLabel}>Register Before</Text>
-              <Text style={styles.dateValue}>10 Aug 26</Text>
-              <Text style={styles.dateTime}>11:50 PM</Text>
+              <Text style={styles.dateLabel}>{t.registerBefore}</Text>
+              <Text style={styles.dateValue}>{regEnd.date}</Text>
+              <Text style={styles.dateTime}>{regEnd.time}</Text>
             </View>
             <View style={styles.dateCard}>
               <Text style={styles.dateIcon}>📝</Text>
-              <Text style={styles.dateLabel}>Submission Starts</Text>
-              <Text style={styles.dateValue}>6 Aug 26</Text>
-              <Text style={styles.dateTime}>04:00 AM</Text>
+              <Text style={styles.dateLabel}>{t.submissionStarts}</Text>
+              <Text style={styles.dateValue}>{subStart.date}</Text>
+              <Text style={styles.dateTime}>{subStart.time}</Text>
             </View>
             <View style={styles.dateCard}>
               <Text style={styles.dateIcon}>⏳</Text>
-              <Text style={styles.dateLabel}>Submission Ends</Text>
-              <Text style={styles.dateValue}>30 Aug 26</Text>
-              <Text style={styles.dateTime}>11:55 PM</Text>
+              <Text style={styles.dateLabel}>{t.submissionEnds}</Text>
+              <Text style={styles.dateValue}>{subEnd.date}</Text>
+              <Text style={styles.dateTime}>{subEnd.time}</Text>
             </View>
             <View style={styles.dateCard}>
               <Text style={styles.dateIcon}>🏆</Text>
-              <Text style={styles.dateLabel}>Result Date</Text>
-              <Text style={styles.dateValue}>1 Sept 26</Text>
-              <Text style={styles.dateTime}>11:50 PM</Text>
+              <Text style={styles.dateLabel}>{t.resultDate}</Text>
+              <Text style={styles.dateValue}>{resultDate.date}</Text>
+              <Text style={styles.dateTime}>{resultDate.time}</Text>
             </View>
           </View>
         </View>
@@ -282,13 +415,13 @@ export default function CompetitionDetailScreen() {
 
         {/* ── Previous Winners ───────────────────────────────────────── */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Previous Winners</Text>
+          <Text style={styles.sectionTitle}>{t.previousWinners}</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.winnersScroll}
           >
-            {PREVIOUS_WINNERS.map((winner, idx) => (
+            {previousWinners.map((winner, idx) => (
               <View key={idx} style={styles.winnerCard}>
                 <View style={styles.winnerImageContainer}>
                   <View style={styles.winnerImage}>
@@ -305,7 +438,9 @@ export default function CompetitionDetailScreen() {
                 <Text style={styles.winnerName} numberOfLines={1}>
                   {winner.name}
                 </Text>
-                <Text style={styles.winnerPosition}>{winner.position}</Text>
+                <Text style={styles.winnerPosition}>
+                  {translatePosition(winner.position)}
+                </Text>
               </View>
             ))}
           </ScrollView>
@@ -315,7 +450,7 @@ export default function CompetitionDetailScreen() {
 
         {/* ── Tabs ───────────────────────────────────────────────────── */}
         <View style={styles.tabsContainer}>
-          {TABS.map((tab, idx) => (
+          {[t.tabAbout, t.tabJudging, t.tabRules].map((tab, idx) => (
             <TouchableOpacity
               key={idx}
               style={[styles.tab, activeTab === idx && styles.activeTab]}
@@ -335,18 +470,39 @@ export default function CompetitionDetailScreen() {
 
         {/* ── Tab Content ────────────────────────────────────────────── */}
         <View style={styles.tabContent}>
-          <Text style={styles.aboutText}>
-            This is an online classical dance competition open for all age
-            groups.
-          </Text>
-          <Text style={styles.aboutText}>
-            Participate from anywhere and showcase your talent.
-          </Text>
-          <Text style={styles.aboutText}>
-            Express your passion through traditional dance.
-          </Text>
+          {activeTab === 0 &&
+            (activeLang === "ENG" ? aboutContent : [t.aboutText1, t.aboutText2, t.aboutText3]).map(
+              (text, idx) => (
+                <Text key={idx} style={styles.aboutText}>
+                  {text}
+                </Text>
+              )
+            )}
+          {activeTab === 1 &&
+            (comp?.judgingParameters ?? [
+              "Technique and form accuracy",
+              "Expression and emotional depth (abhinaya)",
+              "Rhythm and timing (taal)",
+              "Costume and presentation",
+              "Overall performance impact",
+            ]).map((text, idx) => (
+              <Text key={idx} style={styles.aboutText}>
+                • {text}
+              </Text>
+            ))}
+          {activeTab === 2 &&
+            (comp?.rulesAndEligibility ?? [
+              "Open to all age groups",
+              "Only classical dance forms are allowed",
+              "Video must be between 2-5 minutes",
+              "Solo performances only",
+            ]).map((text, idx) => (
+              <Text key={idx} style={styles.aboutText}>
+                • {text}
+              </Text>
+            ))}
           <TouchableOpacity style={styles.viewMoreBtn}>
-            <Text style={styles.viewMoreText}>View more ∨</Text>
+            <Text style={styles.viewMoreText}>{t.viewMore}</Text>
           </TouchableOpacity>
         </View>
 
@@ -355,20 +511,22 @@ export default function CompetitionDetailScreen() {
         {/* ── Rewards ────────────────────────────────────────────────── */}
         <View style={styles.sectionContainer}>
           <View style={styles.rewardsHeader}>
-            <Text style={styles.sectionTitle}>Rewards</Text>
-            <Text style={styles.rewardsSubtitle}>(All Positions)</Text>
+            <Text style={styles.sectionTitle}>{t.rewards}</Text>
+            <Text style={styles.rewardsSubtitle}>{t.allPositions}</Text>
           </View>
-          {REWARDS.map((reward, idx) => (
+          {rewards.map((reward, idx) => (
             <View
               key={idx}
               style={[
                 styles.rewardRow,
-                idx < REWARDS.length - 1 && styles.rewardRowBorder,
+                idx < rewards.length - 1 && styles.rewardRowBorder,
               ]}
             >
               <View style={styles.rewardLeft}>
                 <Text style={styles.rewardIcon}>{reward.icon}</Text>
-                <Text style={styles.rewardPosition}>{reward.position}</Text>
+                <Text style={styles.rewardPosition}>
+                  {translatePosition(reward.position)}
+                </Text>
               </View>
               <Text style={styles.rewardAmount}>₹ {reward.amount}</Text>
             </View>
@@ -381,9 +539,8 @@ export default function CompetitionDetailScreen() {
         <View style={styles.disclaimerRow}>
           <Text style={styles.disclaimerIcon}>ⓘ</Text>
           <Text style={styles.disclaimerText}>
-            <Text style={styles.disclaimerBold}>Disclaimer: </Text>
-            Only contributions from paid participants will be considered for
-            judging.
+            <Text style={styles.disclaimerBold}>{t.disclaimerLabel}</Text>
+            {activeLang === "ENG" ? disclaimer : t.disclaimerText}
           </Text>
         </View>
 
@@ -396,24 +553,20 @@ export default function CompetitionDetailScreen() {
               <Text style={styles.infoIconText}>▶</Text>
             </View>
             <View>
-              <Text style={styles.infoTitle}>
-                How will you receive{"\n"}prize money?
-              </Text>
-              <Text style={styles.infoSubtitle}>
-                Watch video to know more
-              </Text>
+              <Text style={styles.infoTitle}>{t.howReceivePrize}</Text>
+              <Text style={styles.infoSubtitle}>{t.watchVideo}</Text>
             </View>
           </View>
           <View style={styles.infoItemRight}>
             <Text style={styles.refundIcon}>📋</Text>
-            <Text style={styles.refundTitle}>Refund policy</Text>
+            <Text style={styles.refundTitle}>{t.refundPolicy}</Text>
           </View>
         </View>
 
         <View style={styles.securePaymentRow}>
           <Text style={styles.secureIcon}>🔒</Text>
-          <Text style={styles.secureText}>Secure payments powered by</Text>
-          <Text style={styles.razorpayText}> Razorpay</Text>
+          <Text style={styles.secureText}>{t.securePayments}</Text>
+          <Text style={styles.razorpayText}>{t.razorpay}</Text>
         </View>
 
         <View style={styles.divider} />
@@ -422,24 +575,43 @@ export default function CompetitionDetailScreen() {
         <View style={styles.referSection}>
           <View style={styles.referHeader}>
             <Text style={styles.referMegaphone}>📢</Text>
-            <Text style={styles.referTitle}>Refer & Earn more discount</Text>
+            <Text style={styles.referTitle}>{t.referEarn}</Text>
           </View>
           <View style={styles.referLinkRow}>
-            <View style={styles.referLinkInput}>
-              <Text style={styles.referLinkText} numberOfLines={1}>
-                https://feedants.com/r/referral123
-              </Text>
+            <View
+              style={styles.referLinkInput}
+              onLayout={(e) => {
+                referInputY.current = e.nativeEvent.layout.y;
+              }}
+            >
+              <TextInput
+                style={styles.referLinkTextInput}
+                value={referralLink}
+                onChangeText={setReferralLink}
+                placeholder="Enter referral link"
+                placeholderTextColor={COLORS.gray400}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                numberOfLines={1}
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollTo({ y: referInputY.current + 200, animated: true });
+                  }, 300);
+                }}
+              />
               <TouchableOpacity style={styles.copyLinkBtn}>
-                <Text style={styles.copyLinkText}>Copy Link</Text>
+                <Text style={styles.copyLinkText}>{t.copyLink}</Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={styles.referNowBtn}>
-              <Text style={styles.referNowText}>Refer Now</Text>
+              <Text style={styles.referNowText}>{t.referNow}</Text>
             </TouchableOpacity>
           </View>
           <Text style={styles.referEarnText}>
-            You earn <Text style={styles.referEarnBold}>₹10</Text> for every
-            signup
+            {t.youEarn}
+            <Text style={styles.referEarnBold}>₹{referralEarning}</Text>
+            {t.forEverySignup}
           </Text>
         </View>
 
@@ -451,10 +623,10 @@ export default function CompetitionDetailScreen() {
             <Text style={styles.hearFromUsersIcon}>💬</Text>
             <View>
               <Text style={styles.hearFromUsersTitle}>
-                Hear From Our Users
+                {t.hearFromUsers}
               </Text>
               <Text style={styles.hearFromUsersSubtitle}>
-                See what participants say about Feedants
+                {t.hearFromUsersSub}
               </Text>
             </View>
           </View>
@@ -466,18 +638,19 @@ export default function CompetitionDetailScreen() {
         {/* ── Ad Placeholder ──────────────────────────────────────────── */}
         <View style={styles.adPlaceholder}>
           <Text style={styles.adIcon}>📢</Text>
-          <Text style={styles.adText}>Ad Here</Text>
+          <Text style={styles.adText}>{t.adHere}</Text>
         </View>
 
         {/* Bottom Spacer */}
         <View style={{ height: 120 }} />
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* ── Upload Submission Button ──────────────────────────────────── */}
       <View style={styles.bottomButtonContainer}>
         <TouchableOpacity style={styles.uploadSubmissionBtn}>
-          <Text style={styles.uploadSubmissionText}>Upload Submission</Text>
-          <Text style={styles.uploadSubmissionSub}>Registered</Text>
+          <Text style={styles.uploadSubmissionText}>{t.uploadSubmission}</Text>
+          <Text style={styles.uploadSubmissionSub}>{t.registered}</Text>
         </TouchableOpacity>
       </View>
 
@@ -485,11 +658,11 @@ export default function CompetitionDetailScreen() {
       <View style={styles.bottomTabBar}>
         <TouchableOpacity style={styles.bottomTab}>
           <Text style={styles.bottomTabIcon}>🏠</Text>
-          <Text style={styles.bottomTabLabel}>Home</Text>
+          <Text style={styles.bottomTabLabel}>{t.home}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.bottomTab}>
           <Text style={styles.bottomTabIcon}>🔍</Text>
-          <Text style={styles.bottomTabLabel}>Explore</Text>
+          <Text style={styles.bottomTabLabel}>{t.explore}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.bottomTabCenter}>
           <View style={styles.plusButton}>
@@ -498,11 +671,11 @@ export default function CompetitionDetailScreen() {
         </TouchableOpacity>
         <TouchableOpacity style={styles.bottomTab}>
           <Text style={styles.bottomTabIconActive}>🏆</Text>
-          <Text style={styles.bottomTabLabelActive}>Competitions</Text>
+          <Text style={styles.bottomTabLabelActive}>{t.competitions}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.bottomTab}>
           <Text style={styles.bottomTabIcon}>👤</Text>
-          <Text style={styles.bottomTabLabel}>Profile</Text>
+          <Text style={styles.bottomTabLabel}>{t.profile}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -1148,10 +1321,12 @@ const styles = StyleSheet.create({
     height: 36,
     overflow: "hidden",
   },
-  referLinkText: {
+  referLinkTextInput: {
     flex: 1,
     fontSize: 11,
-    color: COLORS.gray500,
+    color: COLORS.gray600,
+    paddingVertical: 0,
+    height: 36,
   },
   copyLinkBtn: {
     backgroundColor: COLORS.white,
