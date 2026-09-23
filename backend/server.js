@@ -10,6 +10,7 @@ const competitionRoutes = require("./routes/competitions");
 const userRoutes = require("./routes/users");
 const registrationRoutes = require("./routes/registrations");
 const winnerRoutes = require("./routes/winners");
+const applicationRoutes = require("./routes/applications");
 
 // ─── Initialize Express ────────────────────────────────────────────────────
 const app = express();
@@ -32,6 +33,7 @@ app.get("/", (req, res) => {
       users: "/api/users",
       registrations: "/api/registrations",
       winners: "/api/winners",
+      applications: "/api/applications",
     },
   });
 });
@@ -41,6 +43,7 @@ app.use("/api/competitions", competitionRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/registrations", registrationRoutes);
 app.use("/api/winners", winnerRoutes);
+app.use("/api/applications", applicationRoutes);
 
 // ─── 404 Handler ───────────────────────────────────────────────────────────
 app.use((req, res) => {

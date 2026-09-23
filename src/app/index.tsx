@@ -13,8 +13,12 @@ import {
   TextInput,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
+  Alert,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
 
 import { TRANSLATIONS, POSITION_KEY } from "../translations";
 import { fetchCompetition, Competition } from "../api";
@@ -144,6 +148,9 @@ export default function CompetitionDetailScreen() {
   const [referralLink, setReferralLink] = useState("https://feedants.com/r/referral123");
   const scrollViewRef = useRef<ScrollView>(null);
   const referInputY = useRef(0);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // ── Fetch competition from backend ──────────────────────────────────────
   useEffect(() => {
@@ -229,39 +236,48 @@ export default function CompetitionDetailScreen() {
           <Text style={styles.goBackArrow}>←</Text>
           <Text style={styles.goBackText}>{t.goBack}</Text>
         </TouchableOpacity>
-        <View style={styles.langToggle}>
+        <View style={styles.headerRightGroup}>
           <TouchableOpacity
-            style={[
-              styles.langBtn,
-              activeLang === "ENG" && styles.langBtnActive,
-            ]}
-            onPress={() => setActiveLang("ENG")}
+            style={styles.organiserHeaderBtn}
+            onPress={() => router.push("/organiser")}
           >
-            <Text
-              style={[
-                styles.langBtnText,
-                activeLang === "ENG" && styles.langBtnTextActive,
-              ]}
-            >
-              ENG
-            </Text>
+            <Text style={styles.organiserHeaderIcon}>👑</Text>
+            <Text style={styles.organiserHeaderText}>{t.organiserPortal}</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.langBtn,
-              activeLang === "हिंदी" && styles.langBtnActive,
-            ]}
-            onPress={() => setActiveLang("हिंदी")}
-          >
-            <Text
+          <View style={styles.langToggle}>
+            <TouchableOpacity
               style={[
-                styles.langBtnText,
-                activeLang === "हिंदी" && styles.langBtnTextActive,
+                styles.langBtn,
+                activeLang === "ENG" && styles.langBtnActive,
               ]}
+              onPress={() => setActiveLang("ENG")}
             >
-              हिंदी
-            </Text>
-          </TouchableOpacity>
+              <Text
+                style={[
+                  styles.langBtnText,
+                  activeLang === "ENG" && styles.langBtnTextActive,
+                ]}
+              >
+                ENG
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.langBtn,
+                activeLang === "हिंदी" && styles.langBtnActive,
+              ]}
+              onPress={() => setActiveLang("हिंदी")}
+            >
+              <Text
+                style={[
+                  styles.langBtnText,
+                  activeLang === "हिंदी" && styles.langBtnTextActive,
+                ]}
+              >
+                हिंदी
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -557,10 +573,10 @@ export default function CompetitionDetailScreen() {
               <Text style={styles.infoSubtitle}>{t.watchVideo}</Text>
             </View>
           </View>
-          <View style={styles.infoItemRight}>
+          <TouchableOpacity style={styles.infoItemRight} onPress={() => setShowRefundModal(true)}>
             <Text style={styles.refundIcon}>📋</Text>
             <Text style={styles.refundTitle}>{t.refundPolicy}</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.securePaymentRow}>
@@ -600,8 +616,16 @@ export default function CompetitionDetailScreen() {
                   }, 300);
                 }}
               />
-              <TouchableOpacity style={styles.copyLinkBtn}>
-                <Text style={styles.copyLinkText}>{t.copyLink}</Text>
+              <TouchableOpacity
+                style={styles.copyLinkBtn}
+                onPress={async () => {
+                  await Clipboard.setStringAsync(referralLink);
+                  setCopied(true);
+                  Alert.alert("✅ Copied!", "Referral link copied to clipboard.");
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                <Text style={styles.copyLinkText}>{copied ? "✓ Copied" : t.copyLink}</Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={styles.referNowBtn}>
@@ -618,7 +642,7 @@ export default function CompetitionDetailScreen() {
         <View style={styles.divider} />
 
         {/* ── Hear From Our Users ─────────────────────────────────────── */}
-        <TouchableOpacity style={styles.hearFromUsersRow}>
+        <TouchableOpacity style={styles.hearFromUsersRow} onPress={() => setShowFeedbackModal(true)}>
           <View style={styles.hearFromUsersLeft}>
             <Text style={styles.hearFromUsersIcon}>💬</Text>
             <View>
@@ -648,9 +672,12 @@ export default function CompetitionDetailScreen() {
 
       {/* ── Upload Submission Button ──────────────────────────────────── */}
       <View style={styles.bottomButtonContainer}>
-        <TouchableOpacity style={styles.uploadSubmissionBtn}>
-          <Text style={styles.uploadSubmissionText}>{t.uploadSubmission}</Text>
-          <Text style={styles.uploadSubmissionSub}>{t.registered}</Text>
+        <TouchableOpacity
+          style={styles.uploadSubmissionBtn}
+          onPress={() => router.push("/apply")}
+        >
+          <Text style={styles.uploadSubmissionText}>Upload Submission</Text>
+          <Text style={styles.uploadSubmissionSub}>registration</Text>
         </TouchableOpacity>
       </View>
 
@@ -664,7 +691,10 @@ export default function CompetitionDetailScreen() {
           <Text style={styles.bottomTabIcon}>🔍</Text>
           <Text style={styles.bottomTabLabel}>{t.explore}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.bottomTabCenter}>
+        <TouchableOpacity
+          style={styles.bottomTabCenter}
+          onPress={() => router.push("/apply")}
+        >
           <View style={styles.plusButton}>
             <Text style={styles.plusButtonText}>+</Text>
           </View>
@@ -674,10 +704,142 @@ export default function CompetitionDetailScreen() {
           <Text style={styles.bottomTabLabelActive}>{t.competitions}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.bottomTab}>
-          <Text style={styles.bottomTabIcon}>👤</Text>
+          <Image
+            source={{
+              uri: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
+            }}
+            style={styles.tabProfileImage}
+          />
           <Text style={styles.bottomTabLabel}>{t.profile}</Text>
         </TouchableOpacity>
       </View>
+      {/* ── Refund Policy Modal ──────────────────────────────────────── */}
+      <Modal
+        visible={showRefundModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowRefundModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>📋 {t.refundPolicy}</Text>
+              <TouchableOpacity onPress={() => setShowRefundModal(false)}>
+                <Text style={styles.modalCloseBtn}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalSectionTitle}>Eligibility for Refund</Text>
+              <Text style={styles.modalText}>
+                • Full refund is available if you cancel your registration before the submission period starts.{"\n"}
+                • 50% refund if cancelled within 24 hours after submission period starts.{"\n"}
+                • No refund once you have submitted your entry.
+              </Text>
+
+              <Text style={styles.modalSectionTitle}>Processing Time</Text>
+              <Text style={styles.modalText}>
+                • Refunds are processed within 5–7 business days.{"\n"}
+                • The amount will be credited back to the original payment method (UPI, card, or wallet).
+              </Text>
+
+              <Text style={styles.modalSectionTitle}>Non-Refundable Cases</Text>
+              <Text style={styles.modalText}>
+                • Disqualification due to rule violations.{"\n"}
+                • Failure to submit within the given deadline.{"\n"}
+                • Duplicate or fraudulent registrations.
+              </Text>
+
+              <Text style={styles.modalSectionTitle}>How to Request a Refund</Text>
+              <Text style={styles.modalText}>
+                • Go to My Registrations → Select the competition → Tap "Request Refund".{"\n"}
+                • Alternatively, email support@feedants.com with your registration ID.
+              </Text>
+
+              <Text style={[styles.modalText, { marginTop: 12, fontStyle: "italic", color: COLORS.gray400 }]}>
+                Feedants reserves the right to modify this refund policy at any time. Changes will be communicated via app notification.
+              </Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── User Feedback Modal ────────────────────────────────────────── */}
+      <Modal
+        visible={showFeedbackModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFeedbackModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>💬 {t.hearFromUsers}</Text>
+              <TouchableOpacity onPress={() => setShowFeedbackModal(false)}>
+                <Text style={styles.modalCloseBtn}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              {[
+                {
+                  name: "Priya Sharma",
+                  avatar: "P",
+                  rating: 5,
+                  text: "Amazing platform! I won 2nd prize in the Bharatanatyam competition. The judging was fair and transparent. Highly recommended for all dancers!",
+                  time: "2 weeks ago",
+                },
+                {
+                  name: "Rahul Verma",
+                  avatar: "R",
+                  rating: 4,
+                  text: "Very easy to use. I uploaded my Kathak performance and got detailed feedback from the judge. The certificate looks great too!",
+                  time: "1 month ago",
+                },
+                {
+                  name: "Ananya Patel",
+                  avatar: "A",
+                  rating: 5,
+                  text: "Love that I can participate from home! No need to travel anywhere. The prize money was credited within 3 days. Super smooth experience.",
+                  time: "1 month ago",
+                },
+                {
+                  name: "Vikram Singh",
+                  avatar: "V",
+                  rating: 4,
+                  text: "Good concept! Participated with my daughter in the kids category. She was so happy to receive the participation certificate. Will definitely join again.",
+                  time: "2 months ago",
+                },
+                {
+                  name: "Sneha Reddy",
+                  avatar: "S",
+                  rating: 5,
+                  text: "Feedants is the best platform for online dance competitions. I've participated 3 times and won twice! The referral program is a nice bonus too.",
+                  time: "3 months ago",
+                },
+              ].map((review, idx) => (
+                <View key={idx} style={styles.feedbackCard}>
+                  <View style={styles.feedbackHeader}>
+                    <View style={styles.feedbackAvatar}>
+                      <Text style={styles.feedbackAvatarText}>{review.avatar}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.feedbackName}>{review.name}</Text>
+                      <View style={styles.feedbackStars}>
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Text key={i} style={{ fontSize: 12, color: i < review.rating ? COLORS.accent : COLORS.gray300 }}>
+                            ★
+                          </Text>
+                        ))}
+                        <Text style={styles.feedbackTime}>{review.time}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <Text style={styles.feedbackText}>{review.text}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -714,6 +876,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.black,
     fontWeight: "500",
+  },
+  headerRightGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  organiserHeaderBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: "#B2DFDB",
+  },
+  organiserHeaderIcon: {
+    fontSize: 12,
+  },
+  organiserHeaderText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
   },
   langToggle: {
     flexDirection: "row",
@@ -1445,6 +1631,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 1,
   },
+  applyTeamBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 4,
+  },
+  applyTeamBtnText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  applyTeamBtnSub: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 11,
+    marginTop: 2,
+    fontWeight: "500",
+  },
 
   // ── Bottom Tab Bar ───────────────────────────────────────
   bottomTabBar: {
@@ -1500,6 +1708,12 @@ const styles = StyleSheet.create({
     fontSize: 20,
     marginBottom: 2,
   },
+  tabProfileImage: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    marginBottom: 2,
+  },
   bottomTabLabel: {
     fontSize: 10,
     color: COLORS.gray500,
@@ -1508,5 +1722,104 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: COLORS.primary,
     fontWeight: "600",
+  },
+
+  // ── Modal Styles ─────────────────────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContainer: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "80%",
+    paddingBottom: 30,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray200,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.black,
+  },
+  modalCloseBtn: {
+    fontSize: 20,
+    color: COLORS.gray500,
+    padding: 4,
+  },
+  modalScroll: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  modalSectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  modalText: {
+    fontSize: 13,
+    color: COLORS.gray600,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+
+  // ── Feedback Card Styles ─────────────────────────────────
+  feedbackCard: {
+    backgroundColor: COLORS.gray100,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+  },
+  feedbackHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 8,
+  },
+  feedbackAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: COLORS.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  feedbackAvatarText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  feedbackName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.black,
+  },
+  feedbackStars: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 1,
+    marginTop: 2,
+  },
+  feedbackTime: {
+    fontSize: 10,
+    color: COLORS.gray400,
+    marginLeft: 6,
+  },
+  feedbackText: {
+    fontSize: 13,
+    color: COLORS.gray600,
+    lineHeight: 19,
   },
 });

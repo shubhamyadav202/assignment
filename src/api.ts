@@ -64,6 +64,41 @@ export interface Competition {
   previousWinners?: Winner[];
 }
 
+export interface EmailDeliveryInfo {
+  sent: boolean;
+  sentAt: string | null;
+  resendId: string | null;
+  error: string | null;
+}
+
+export interface DanceApplication {
+  _id: string;
+  teamName: string;
+  leaderName: string;
+  leaderEmail: string;
+  leaderPhone: string;
+  memberCount: number;
+  danceStyle: string;
+  experienceLevel: "Beginner" | "Intermediate" | "Advanced" | "Professional";
+  city: string;
+  videoUrl: string;
+  proposal: string;
+  competition?: string | { _id: string; title: string } | null;
+  status: "pending" | "accepted" | "rejected";
+  rejectionReason?: string | null;
+  statusUpdatedAt?: string | null;
+  emailDelivery?: EmailDeliveryInfo;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApplicationCounts {
+  all: number;
+  pending: number;
+  accepted: number;
+  rejected: number;
+}
+
 // ─── Fetch helpers ──────────────────────────────────────────────────────────
 
 /**
@@ -92,3 +127,98 @@ export async function fetchCompetition(): Promise<Competition> {
 
   return detailData.data as Competition;
 }
+
+/**
+ * Submit a dance team application to the competition.
+ */
+export async function submitDanceApplication(data: Partial<DanceApplication>): Promise<{
+  success: boolean;
+  message: string;
+  data: DanceApplication;
+}> {
+  const res = await fetch(`${BASE_URL}/applications`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || "Failed to submit application");
+  }
+
+  return json;
+}
+
+/**
+ * Fetch all dance applications for the organiser dashboard.
+ */
+export async function fetchDanceApplications(
+  status: string = "all",
+  search?: string
+): Promise<{
+  data: DanceApplication[];
+  counts: ApplicationCounts;
+  count: number;
+}> {
+  const params = new URLSearchParams();
+  if (status && status !== "all") params.append("status", status);
+  if (search && search.trim()) params.append("q", search.trim());
+
+  const queryStr = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${BASE_URL}/applications${queryStr}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  const json = await res.json();
+
+  if (!json.success) {
+    throw new Error(json.error || "Failed to fetch applications");
+  }
+
+  return {
+    data: json.data,
+    counts: json.counts || { all: 0, pending: 0, accepted: 0, rejected: 0 },
+    count: json.count,
+  };
+}
+
+/**
+ * Update application status (accept/reject) and trigger Resend email when accepted.
+ */
+export async function updateDanceApplicationStatus(
+  id: string,
+  status: "accepted" | "rejected" | "pending",
+  reason?: string
+): Promise<{
+  success: boolean;
+  message: string;
+  data: DanceApplication;
+  emailResult?: any;
+}> {
+  const res = await fetch(`${BASE_URL}/applications/${id}/status`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ status, reason }),
+  });
+
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || `Failed to update status to ${status}`);
+  }
+
+  return json;
+}
+
+/**
+ * Seed sample applications (for quick testing)
+ */
+export async function seedDanceApplications(force: boolean = false): Promise<any> {
+  const res = await fetch(`${BASE_URL}/applications/seed${force ? "?force=true" : ""}`, {
+    method: "POST",
+  });
+  return res.json();
+}
+
