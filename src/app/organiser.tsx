@@ -132,11 +132,13 @@ export default function OrganiserScreen() {
 
             if (isAccepting) {
               const emailNote = res.emailResult?.simulated
-                ? `\n\n📬 [Resend Test Mode]: Selection email event logged for ${app.leaderEmail}.`
-                : `\n\n✉️ Selection confirmation email sent to ${app.leaderEmail} via Resend.`;
+                ? `\n\n📬 [Resend Test Mode]: Selection email event simulated for ${app.leaderEmail}.`
+                : res.emailResult?.success
+                ? `\n\n✉️ Official selection email delivered to ${app.leaderEmail} via Resend! (ID: ${res.emailResult.id})`
+                : `\n\n⚠️ Resend Note: ${res.emailResult?.error || "Email delivery failed"}`;
               Alert.alert("🎉 Team Accepted!", `"${app.teamName}" has been selected!${emailNote}`);
             } else {
-              Alert.alert("Application Rejected", `"${app.teamName}" has been rejected.`);
+              Alert.alert("Application Rejected", `"${app.teamName}" has been marked as rejected.`);
             }
 
             // Refresh counts

@@ -352,6 +352,33 @@ export default function CompetitionDetailScreen() {
 
         <View style={styles.divider} />
 
+        {/* ── Dance Team Application & Organiser Portal Card ───────────── */}
+        <View style={styles.appBannerCard}>
+          <View style={styles.appBannerBadge}>
+            <Text style={styles.appBannerBadgeText}>✨ TEAM REGISTRATION OPEN</Text>
+          </View>
+          <Text style={styles.appBannerTitle}>Dance Team Auditions & Proposal</Text>
+          <Text style={styles.appBannerSubtitle}>
+            Apply with your dance crew details, leader email & audition video. The organiser reviews incoming applications and sends an acceptance email via Resend!
+          </Text>
+          <View style={styles.appBannerActions}>
+            <TouchableOpacity
+              style={styles.appBannerApplyBtn}
+              onPress={() => router.push("/apply")}
+            >
+              <Text style={styles.appBannerApplyBtnText}>📝 Apply as Dance Team →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.appBannerOrganiserBtn}
+              onPress={() => router.push("/organiser")}
+            >
+              <Text style={styles.appBannerOrganiserBtnText}>👑 Organiser Portal</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
         {/* ── Judge Section ──────────────────────────────────────────── */}
         <View style={styles.judgeSection}>
           <View style={styles.judgeLeft}>
@@ -1053,6 +1080,73 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.gray500,
     marginTop: 2,
+  },
+
+  // ── Dance Team Banner ────────────────────────────────────
+  appBannerCard: {
+    marginHorizontal: 16,
+    marginVertical: 14,
+    backgroundColor: "#F0F9F9",
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: "#B2DFDB",
+  },
+  appBannerBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  appBannerBadgeText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  appBannerTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: COLORS.primaryDark,
+    marginBottom: 4,
+  },
+  appBannerSubtitle: {
+    fontSize: 12,
+    color: COLORS.gray600,
+    lineHeight: 17,
+    marginBottom: 12,
+  },
+  appBannerActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  appBannerApplyBtn: {
+    flex: 1.5,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  appBannerApplyBtnText: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  appBannerOrganiserBtn: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  appBannerOrganiserBtnText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   // ── Divider ──────────────────────────────────────────────
